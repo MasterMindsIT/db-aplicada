@@ -1,33 +1,3 @@
--- BORRADO DE TODAS LAS TABLAS SIN IMPORTAR EL ORDEN
-BEGIN
-    FOR t IN (
-        SELECT table_name FROM user_tables 
-        WHERE table_name IN (
-            'PAIS',
-            'REGION',
-            'GENERO',
-            'ESTADO_CIVIL',
-            'POSTULANTE',
-            'TIPO_DOCUMENTO',
-            'TIPO_SISTEMA',
-            'DOCUMENTO',
-            'TIPO_PROGRAMA',
-            'AREA_PROGRAMA',
-            'PROGRAMA_BECAS',
-            'INSTITUCION_DESTINO',
-            'ESTADO_POSTULACION',
-            'POSTULACION',
-            'DOCUMENTO_PRESENTADO',
-            'CRITERIO_EVALUACION',
-            'SUBCRITERIO_EVALUACION',
-            'PONDERACION_SUBCRITERIO',
-            'EVALUACION_DOCUMENTO'
-        )
-    ) LOOP
-        EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name || ' CASCADE CONSTRAINTS';
-    END LOOP;
-END;
-
 CREATE TABLE pais (
     id_pais NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nombre_pais VARCHAR2(100) NOT NULL UNIQUE
@@ -200,19 +170,3 @@ CREATE TABLE evaluacion_documento (
     comentario VARCHAR2(200),
     CONSTRAINT uq_doc_subcriterio UNIQUE (id_documento_presentado, id_subcriterio) --verificamos que no se repita una evaluacion
 );
---Verificacion que el Id ponderacion pertenece al subcriterio
-CREATE OR REPLACE TRIGGER trg_validar_ponderacion
-BEFORE INSERT OR UPDATE ON evaluacion_documento
-FOR EACH ROW
-DECLARE
-    v_subcriterio NUMBER;
-BEGIN
-    SELECT id_subcriterio INTO v_subcriterio
-    FROM ponderacion_subcriterio
-    WHERE id_ponderacion = :NEW.id_ponderacion; --busca que el id exista ya 
-
-    IF v_subcriterio != :NEW.id_subcriterio THEN
-        RAISE_APPLICATION_ERROR(-20001, 'El id_ponderacion no pertenece al subcriterio indicado.');
-    END IF;
-END;
-
