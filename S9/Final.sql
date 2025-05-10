@@ -571,3 +571,35 @@ INSERT INTO DET_PUNTAJE_TRAYECTORIA_POSTULANTES (id_documento_presentado, id_sub
 INSERT INTO configuracion_ocde(id_config,posicion_chilena) VALUES (1,101);
 
 commit;
+Necesito un select de la tabla postulante principalmente y un solo join con la tabla region
+campo1: NRO POSTULANTE, es un secuencial de 1 a n del total de respuestas
+campo2: ID POSTULANTE, es la concatenacion de e ultimos digitos rut_numero + rut_dv + todas las iniciales de  nombres(cada inicial de todos los nombres que tenga), ap_paterno, ap_materno+mes y anio(solo 2 digitos) de fecha_registro
+campo3: RUN POSTULANTE, es la concatenacion de rut_numero + rut_dv
+campo4:NOMBRE POSTULANTE, es la concatenacion de initcap nombres + ap_paterno + ap_materno inicial en mayuscula
+campo5: FECHA POSTULACION,fecha_registro pero ne formato dialiteral contatenado fecha dia mes anios ejemplo Lunes.10-marzo-2024
+campo6: INST.EDUC EXTRANJERA, todo con null de respuestas
+campo7: PUNTAJE TRAYECTORIA, todo con null de respuestas
+campo8: ETNIA, si el campo etnia es null colocar el valor "No" y si tiene valor colocar "Si"
+campo9: PTJ ETNIA, si el campo etnia es null colocar el valor "0" y si tiene valor colocar "0.1"
+campo10: DISCAPACIDAD, si el campo discapacidad es nu colocar el valor "No" y si tiene valor colocar "Si"
+campo11: PTJ DISCAPACIDAD, si el campo discapacidad es null colocar el valor "0" y si tiene valor colocar "0.1"
+campo12: TITULO REGIONES, el id_region_titulacion se debe hacer join con la tabla 'region' y si el nombre_region es 'Región Metropolitana' colocar el valor "No" y si es distinto "Si"
+campo15: PTJ TITULO REGIONES, el id_region_titulacion se debe hacer join con la tabla 'region' y si el nombre_region es 'Región Metropolitana' colocar el valor "0" y si es distinto "0.1"
+campo14: BECA REP, si el campo beca_reparacion es nu colocar el valor "No" y si tiene valor colocar "Si"
+campo11: PTJ BECA REP, si el campo beca_reparacion es null colocar el valor "0" y si tiene valor colocar "0.1"
+
+rut_numero, rut_dv, nombres, ap_paterno, ap_materno, fecha_nacimiento, correo_electronico, telefono_contacto, nacionalidad, discapacidad, id_genero, id_estado_civil, id_region_residencia, id_region_titulacion, posicion_ranking, total_egresados
+
+Necesito agregar unos campos al scrip que te pase, justo despues del campo "FECHA POSTULACION"
+el postulante tiene relacion con la tabla postulacion(id_postulante) y esta con la tabla evalua_comite(id_postulacion, objetivo, intereses, retribucion) tengo una tabla ponderacion(sin relacion) que tienen id y descrpcion, para los campos objetivo, intereses y retribucion, los valores literales seran tomados de la tabla ponderacion que tiene id y descripcion, para los campos ptje_ objetivo, ptje_intereses y ptje_retribucion, con el valor que tenga se debe traer la descripcion
+campo1: OBJETIVO ESTUDIO, el literal de la ponderacion en base al campo objetivo de evalua_comite
+campo2: PTJE OBJETIVO ESTUDIO, el mismo valor del campo objetivo de evalua_comite
+campo3: INTERESES, el literal de la ponderacion en base al campo intereses de evalua_comite
+campo4: PTJE INTERESES, el mismo valor del campo intereses de evalua_comite
+campo5: RETRIBUCION, el literal de la ponderacion en base al campo retribucion de evalua_comite
+campo6: PTJE RETRIBUCION, el mismo valor del campo retribucion de evalua_comite
+agregar tambien los siguientes campos pero despues del campo "PTJ BECA REP"
+campo7: PTE TOTAL, el resultado de sumar los campos PTJ ETNIA,PTJ DISCAPACIDAD,PTJ TITULO REGIONES,PTJ BECA REP,PTJE OBJETIVO ESTUDIO, PTJE INTERESES, PTJE RETRIBUCION
+campo8: PTJE TRAYECTORIA, es la sumatoria de unos porcentajes que valen cada campo de la tabla evalua_comite( actividades 5%, experiencia 5%, recomendacion 5%, objetivo 10%, intereses 5%, retribucion 10%)
+
+objetivo, intereses, retribucion,
