@@ -20,7 +20,8 @@ BEGIN
             'DOCUMENTO_PRESENTADO',
             'EVALUA_COMITE',
             'CONFIGURACION_OCDE',
-            'PONDERACION'
+            'PONDERACION',
+            'DET_PUNTAJE_TRAYECTORIA_POSTULANTES'
         )
     ) LOOP
         BEGIN
@@ -228,7 +229,33 @@ CREATE TABLE configuracion_ocde (
 --Tabla 21: tabla ponderacion para guardar la ponderacion de los puntajes
 CREATE TABLE ponderacion (
     id_ponderacion NUMBER PRIMARY KEY,
-    posicion_chilena VARCHAR2(10) NOT NULL,
+    descripcion VARCHAR2(10) NOT NULL UNIQUE
+);
+
+CREATE TABLE DET_PUNTAJE_TRAYECTORIA_POSTULANTES (
+    id_postulante VARCHAR2(30),
+    run_postulante VARCHAR2(20),
+    nombre_postulante VARCHAR2(100),
+    fecha_postulacion VARCHAR2(40),
+    objetivo_estudio VARCHAR2(50),
+    ptje_objetivo_estudio NUMBER(5,3),
+    intereses VARCHAR2(50),
+    ptje_intereses NUMBER(5,3),
+    retribucion VARCHAR2(50),
+    ptje_retribucion NUMBER(5,3),
+    institucion_extranjera VARCHAR2(100),
+    puntaje_trayectoria NUMBER(5,3),
+    etnia VARCHAR2(2),
+    ptj_etnia NUMBER(5,3),
+    discapacidad VARCHAR2(2),
+    ptj_discapacidad NUMBER(5,3),
+    titulo_regiones VARCHAR2(2),
+    ptj_titulo_regiones NUMBER(5,3),
+    beca_rep VARCHAR2(2),
+    ptj_beca_rep NUMBER(5,3),
+    ptj_total NUMBER(5,3),
+    pond_trayectoria NUMBER(5,3),
+    CONSTRAINT pk_resumen_postulante PRIMARY KEY (id_postulante)
 );
 
 commit;
@@ -578,11 +605,12 @@ INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendaci
 INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendacion, objetivo, intereses, retribucion, comentario) VALUES (9, 1, 5, 4, 4, 4, 4, 'El postulante tararara..');
 INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendacion, objetivo, intereses, retribucion, comentario) VALUES (10, 2, 5, 5, 5, 5, 5, 'El postulante tararara..');
 --Tabla 20
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (0,"No califica");
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (1,"Deficiente");
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (2,"Regular");
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (3,"Bueno");
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (4,"Muy bueno");
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (5,"Excelente");
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (0,'No califica');
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (1,'Deficiente');
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (2,'Regular');
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (3,'Bueno');
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (4,'Muy bueno');
+INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (5,'Excelente');
+
 commit;
 
