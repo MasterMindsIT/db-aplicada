@@ -1,13 +1,13 @@
 SELECT
-    TO_CHAR(p.rut_numero) || '-' || p.rut_dv AS "RUN POSTULANTE",
+    TO_CHAR(p.rut_numero) AS "RUN POSTULANTE",
     INITCAP(p.nombres || ' ' || p.ap_paterno || ' ' || p.ap_materno) AS "NOMBRE POSTULANTE",
     pa.nombre_pais AS "PAIS DESTINO",
     ind.nombre_institucion AS "INSTITUCION DESTINO",
     ind.ranking_ocde AS "RANKING",
-    p.nota_media_pregrado AS "PTJE ANT ACAD PREGRADO",
+    p.puntaje_aa AS "PTJE ANT ACAD PREGRADO",
 
     po1.descripcion AS "DES ACTIVIDADES",
-    po2.descripcion AS "EXP LABORAL",
+    po2.id_ponderacion||' años'  AS "EXP LABORAL",
     po3.descripcion AS "CARTAS",
 
     po4.descripcion AS "OBJ ESTUDIO",
@@ -23,7 +23,7 @@ SELECT
 
     CASE 
         WHEN p.discapacidad IS NULL THEN 'No tiene'
-        ELSE 'Sí'
+        ELSE  INITCAP(p.discapacidad)
     END AS "DISCAPACIDAD",
 
     CASE 
@@ -40,13 +40,37 @@ SELECT
     CAST(
         NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
         NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
-        NVL(CASE WHEN r.nombre_region IS NULL OR LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
         NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0) +
-        NVL(ind.puntaje_ocde * 0.3, 0) +
-        NVL(p.nota_media_pregrado, 0)
+        --las evaluaciones de los expertos
+        NVL(ec.objetivo, 0) +
+        NVL(ec.intereses, 0) +
+        NVL(ec.retribucion, 0) +
+        NVL(ec.actividades, 0) +
+        NVL(ec.experiencia, 0) +
+        NVL(ec.recomendacion, 0) +
+        --Antecedentes academicos
+        NVL(p.puntaje_aa, 0) +
+        --trayectoria institucional
+        NVL(ind.puntaje_ocde, 0) 
     AS NUMBER(5,3)) AS "PTE TOTAL",
 
-    CAST(NULL AS NUMBER(5,3)) AS "POND FINAL", -- si aún no tienes fórmula para este, queda en NULL
+    CAST( NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0) +
+        --las evaluaciones de los expertos
+        NVL(ec.objetivo * 0.1 , 0) +
+        NVL(ec.intereses * 0.05 , 0) +
+        NVL(ec.retribucion * 0.1 , 0) +
+         NVL(ec.actividades * 0.05 , 0) +
+        NVL(ec.experiencia * 0.05 , 0) +
+        NVL(ec.recomendacion * 0.05 , 0) +
+        --Antecedentes academicos
+        NVL(p.puntaje_aa * 0.3 , 0) +
+        --trayectoria institucional
+        NVL(ind.puntaje_ocde * 0.3 , 0)  
+    AS NUMBER(5,3)) AS "POND FINAL", -- si aún no tienes fórmula para este, queda en NULL
 
     ep.estado AS "ESTADO POSTULACIÓN"
 
@@ -64,4 +88,6 @@ LEFT JOIN ponderacion po2 ON po2.id_ponderacion = ec.experiencia
 LEFT JOIN ponderacion po3 ON po3.id_ponderacion = ec.recomendacion
 LEFT JOIN ponderacion po4 ON po4.id_ponderacion = ec.objetivo
 LEFT JOIN ponderacion po5 ON po5.id_ponderacion = ec.intereses
-LEFT JOIN ponderacion po6 ON po6.id_ponderacion = ec.retribucion;
+LEFT JOIN ponderacion po6 ON po6.id_ponderacion = ec.retribucion
+ORDER BY "PTE TOTAL" DESC
+FETCH FIRST 5 ROWS ONLY;

@@ -260,6 +260,7 @@ CREATE TABLE DET_PUNTAJE_TRAYECTORIA_POSTULANTES (
 
 commit;
 
+--LAS FUNCIONES CON LOS TRIGGERS SON PARA EL CALCULO AUTOMATIZADO LO LOS DATOS PARAMETRIZADOS
 
 DROP FUNCTION calcular_puntaje_aa; -- Eliminar la función si existe
 --  función para calcular el puntaje AA de un postulante
@@ -605,7 +606,6 @@ INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendaci
 INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendacion, objetivo, intereses, retribucion, comentario) VALUES (9, 1, 5, 4, 4, 4, 4, 'El postulante tararara..');
 INSERT INTO evalua_comite (id_postulacion, actividades, experiencia, recomendacion, objetivo, intereses, retribucion, comentario) VALUES (10, 2, 5, 5, 5, 5, 5, 'El postulante tararara..');
 --Tabla 20
-INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (0,'No califica');
 INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (1,'Deficiente');
 INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (2,'Regular');
 INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (3,'Bueno');
@@ -614,3 +614,319 @@ INSERT INTO ponderacion (id_ponderacion, descripcion) VALUES (5,'Excelente');
 
 commit;
 
+-- Índices para mejorar el plan de ejecucion de las consultas
+CREATE INDEX idx_postulacion_id_postulante ON postulacion(id_postulante); 
+CREATE INDEX idx_postulacion_id_institucion ON postulacion(id_institucion);
+CREATE INDEX idx_postulacion_id_estado ON postulacion(id_estado);
+CREATE INDEX idx_postulante_puntaje_aa ON postulante(puntaje_aa);
+CREATE INDEX idx_postulante_id_region_titulacion ON postulante(id_region_titulacion);
+CREATE INDEX idx_institucion_puntaje_ocde ON institucion_destino(puntaje_ocde);
+-- Índice para calcular PTE TOTAL y POND FINAL 
+CREATE INDEX idx_evalua_comite_ponderaciones ON evalua_comite (
+    objetivo, intereses, retribucion,
+    actividades, experiencia, recomendacion
+);
+
+--PRIMERA VISTA GUARDADA EN TABLA DET_PUNTAJE_TRAYECTORIA_POSTULANTES.
+INSERT INTO DET_PUNTAJE_TRAYECTORIA_POSTULANTES (
+    id_postulante, run_postulante, nombre_postulante, fecha_postulacion,
+    objetivo_estudio, ptje_objetivo_estudio,
+    intereses, ptje_intereses,
+    retribucion, ptje_retribucion,
+    institucion_extranjera, puntaje_trayectoria,
+    etnia, ptj_etnia,
+    discapacidad, ptj_discapacidad,
+    titulo_regiones, ptj_titulo_regiones,
+    beca_rep, ptj_beca_rep,
+    ptj_total, pond_trayectoria
+)
+SELECT
+   SUBSTR(TO_CHAR(p.rut_numero), -3) || p.rut_dv || 
+   REGEXP_REPLACE(UPPER(p.nombres), '([^A-Z]*)([A-Z])[A-Z]*', '\2') || 
+   SUBSTR(LOWER(p.ap_paterno), 1, 1) || 
+   SUBSTR(LOWER(p.ap_materno), 1, 1) ||  
+   TO_CHAR(p.fecha_registro, 'MMYY'),
+   TO_CHAR(p.rut_numero) || p.rut_dv,
+   INITCAP(p.nombres || ' ' || p.ap_paterno || ' ' || p.ap_materno),
+   TO_CHAR(p.fecha_registro, 'fmDay') || '.' ||
+   TO_CHAR(p.fecha_registro, 'DD"-"fmMonth"-"YYYY', 'nls_date_language=spanish'),
+   NULL, NULL, -- objetivo_estudio, ptje_objetivo_estudio
+   NULL, NULL, -- intereses, ptje_intereses
+   NULL, NULL, -- retribucion, ptje_retribucion
+   NULL, NULL, -- institucion_extranjera, puntaje_trayectoria
+   CASE WHEN p.etnia IS NULL THEN 'No' ELSE 'Si' END,
+   CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END,
+   CASE WHEN p.discapacidad IS NULL THEN 'No' ELSE 'Si' END,
+   CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END,
+   CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 'No' ELSE 'Si' END,
+   CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END,
+   CASE WHEN p.beca_reparacion IS NULL THEN 'No' ELSE 'Si' END,
+   CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END,
+   NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
+   NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
+   NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+   NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0),
+   NULL --ULTIMO CAMPO
+FROM postulante p
+LEFT JOIN region r ON p.id_region_titulacion = r.id_region;
+commit;
+--SEGUNDA VISTA GUARDADA(ACTUALIZA) EN TABLA DET_PUNTAJE_TRAYECTORIA_POSTULANTES.
+MERGE INTO DET_PUNTAJE_TRAYECTORIA_POSTULANTES dest
+USING (
+    SELECT
+        SUBSTR(TO_CHAR(p.rut_numero), -3) || p.rut_dv || 
+        REGEXP_REPLACE(UPPER(p.nombres), '([^A-Z]*)([A-Z])[A-Z]*', '\2') || 
+        SUBSTR(LOWER(p.ap_paterno), 1, 1) || 
+        SUBSTR(LOWER(p.ap_materno), 1, 1) ||  
+        TO_CHAR(p.fecha_registro, 'MMYY') AS id_postulante,
+        TO_CHAR(p.rut_numero, 'FM999G999G999', 'NLS_NUMERIC_CHARACTERS='',.''') || '-' || p.rut_dv AS run_postulante,
+        INITCAP(p.nombres || ' ' || p.ap_paterno || ' ' || p.ap_materno) AS nombre_postulante,
+        TO_CHAR(po.fecha_postulacion, 'fmDay') || '.' ||
+        TO_CHAR(po.fecha_postulacion, 'DD"-"fmMonth"-"YYYY', 'nls_date_language=spanish') AS fecha_postulacion,
+        po1.descripcion AS objetivo_estudio,
+        CAST(ec.objetivo AS NUMBER(5,3)) AS ptje_objetivo_estudio,
+        po2.descripcion AS intereses,
+        CAST(ec.intereses AS NUMBER(5,3)) AS ptje_intereses,
+        po3.descripcion AS retribucion,
+        CAST(ec.retribucion AS NUMBER(5,3)) AS ptje_retribucion,
+        ind.ranking_ocde AS institucion_extranjera,
+        ind.puntaje_ocde AS puntaje_trayectoria,
+        CASE WHEN p.etnia IS NULL THEN 'No' ELSE 'Si' END AS etnia,
+        CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END AS ptj_etnia,
+        CASE WHEN p.discapacidad IS NULL THEN 'No' ELSE 'Si' END AS discapacidad,
+        CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END AS ptj_discapacidad,
+        CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 'No' ELSE 'Si' END AS titulo_regiones,
+        CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END AS ptj_titulo_regiones,
+        CASE WHEN p.beca_reparacion IS NULL THEN 'No' ELSE 'Si' END AS beca_rep,
+        CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END AS ptj_beca_rep,
+        NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(ec.objetivo, 0) +
+        NVL(ec.intereses, 0) +
+        NVL(ec.retribucion, 0) AS ptj_total,
+        NVL(ec.actividades, 0) * 0.05 +
+        NVL(ec.experiencia, 0) * 0.05 +
+        NVL(ec.recomendacion, 0) * 0.05 +
+        NVL(ec.objetivo, 0) * 0.10 +
+        NVL(ec.intereses, 0) * 0.05 +
+        NVL(ec.retribucion, 0) * 0.10 AS pond_trayectoria
+    FROM postulante p
+    LEFT JOIN region r ON p.id_region_titulacion = r.id_region
+    LEFT JOIN postulacion po ON po.id_postulante = p.id_postulante
+    LEFT JOIN institucion_destino ind ON ind.id_institucion = po.id_institucion
+    LEFT JOIN evalua_comite ec ON ec.id_postulacion = po.id_postulacion
+    LEFT JOIN ponderacion po1 ON po1.id_ponderacion = ec.objetivo
+    LEFT JOIN ponderacion po2 ON po2.id_ponderacion = ec.intereses
+    LEFT JOIN ponderacion po3 ON po3.id_ponderacion = ec.retribucion
+) src
+ON (dest.id_postulante = src.id_postulante)
+WHEN MATCHED THEN
+UPDATE SET
+    dest.run_postulante = src.run_postulante,
+    dest.nombre_postulante = src.nombre_postulante,
+    dest.fecha_postulacion = src.fecha_postulacion,
+    dest.objetivo_estudio = src.objetivo_estudio,
+    dest.ptje_objetivo_estudio = src.ptje_objetivo_estudio,
+    dest.intereses = src.intereses,
+    dest.ptje_intereses = src.ptje_intereses,
+    dest.retribucion = src.retribucion,
+    dest.ptje_retribucion = src.ptje_retribucion,
+    dest.institucion_extranjera = src.institucion_extranjera,
+    dest.puntaje_trayectoria = src.puntaje_trayectoria,
+    dest.etnia = src.etnia,
+    dest.ptj_etnia = src.ptj_etnia,
+    dest.discapacidad = src.discapacidad,
+    dest.ptj_discapacidad = src.ptj_discapacidad,
+    dest.titulo_regiones = src.titulo_regiones,
+    dest.ptj_titulo_regiones = src.ptj_titulo_regiones,
+    dest.beca_rep = src.beca_rep,
+    dest.ptj_beca_rep = src.ptj_beca_rep,
+    dest.ptj_total = src.ptj_total,
+    dest.pond_trayectoria = src.pond_trayectoria;
+
+
+commit;
+--TERCERA VISTA CON SOLO 5 USUARIOS DE MAYOR A MENOR PUNTAJE TOTAL
+SELECT
+    TO_CHAR(p.rut_numero) AS "RUN POSTULANTE",
+    INITCAP(p.nombres || ' ' || p.ap_paterno || ' ' || p.ap_materno) AS "NOMBRE POSTULANTE",
+    pa.nombre_pais AS "PAIS DESTINO",
+    ind.nombre_institucion AS "INSTITUCION DESTINO",
+    ind.ranking_ocde AS "RANKING",
+    p.puntaje_aa AS "PTJE ANT ACAD PREGRADO",
+
+    po1.descripcion AS "DES ACTIVIDADES",
+    po2.id_ponderacion||' años'  AS "EXP LABORAL",
+    po3.descripcion AS "CARTAS",
+
+    po4.descripcion AS "OBJ ESTUDIO",
+    po5.descripcion AS "INTERESES",
+    po6.descripcion AS "RETRIBUCION",
+
+    CAST(ind.puntaje_ocde AS NUMBER(5,3)) AS "PTJE. RANKING INST. DESTINO",
+
+    CASE 
+        WHEN p.etnia IS NULL THEN 'No pertenece'
+        ELSE INITCAP(p.etnia)
+    END AS "ETNIA",
+
+    CASE 
+        WHEN p.discapacidad IS NULL THEN 'No tiene'
+        ELSE  INITCAP(p.discapacidad)
+    END AS "DISCAPACIDAD",
+
+    CASE 
+        WHEN r.nombre_region IS NULL OR LOWER(r.nombre_region) = 'región metropolitana' THEN 'No tiene'
+        ELSE INITCAP(r.nombre_region)
+    END AS "TITULO REGIONES",
+
+    CASE 
+        WHEN p.beca_reparacion IS NULL THEN 'No ha sido beneficiado'
+        ELSE 'Ha sido beneficiado'
+    END AS "BECA REP",
+
+    -- PTJE TOTAL = puntajes sociales + puntaje_ocde * 0.3 + nota_media_pregrado
+    CAST(
+        NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0) +
+        --las evaluaciones de los expertos
+        NVL(ec.objetivo, 0) +
+        NVL(ec.intereses, 0) +
+        NVL(ec.retribucion, 0) +
+        NVL(ec.actividades, 0) +
+        NVL(ec.experiencia, 0) +
+        NVL(ec.recomendacion, 0) +
+        --Antecedentes academicos
+        NVL(p.puntaje_aa, 0) +
+        --trayectoria institucional
+        NVL(ind.puntaje_ocde, 0) 
+    AS NUMBER(5,3)) AS "PTE TOTAL",
+
+    CAST( NVL(CASE WHEN p.etnia IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.discapacidad IS NULL THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN LOWER(r.nombre_region) = 'región metropolitana' THEN 0 ELSE 0.1 END, 0) +
+        NVL(CASE WHEN p.beca_reparacion IS NULL THEN 0 ELSE 0.1 END, 0) +
+        --las evaluaciones de los expertos
+        NVL(ec.objetivo * 0.1 , 0) +
+        NVL(ec.intereses * 0.05 , 0) +
+        NVL(ec.retribucion * 0.1 , 0) +
+         NVL(ec.actividades * 0.05 , 0) +
+        NVL(ec.experiencia * 0.05 , 0) +
+        NVL(ec.recomendacion * 0.05 , 0) +
+        --Antecedentes academicos
+        NVL(p.puntaje_aa * 0.3 , 0) +
+        --trayectoria institucional
+        NVL(ind.puntaje_ocde * 0.3 , 0)  
+    AS NUMBER(5,3)) AS "POND FINAL", -- si aún no tienes fórmula para este, queda en NULL
+
+    ep.estado AS "ESTADO POSTULACIÓN"
+
+FROM postulante p
+JOIN postulacion post ON post.id_postulante = p.id_postulante
+LEFT JOIN estado_postulacion ep ON ep.id_estado = post.id_estado
+LEFT JOIN region r ON p.id_region_titulacion = r.id_region
+LEFT JOIN institucion_destino ind ON ind.id_institucion = post.id_institucion
+LEFT JOIN pais pa ON pa.id_pais = ind.id_pais
+LEFT JOIN evalua_comite ec ON ec.id_postulacion = post.id_postulacion
+
+-- JOINS múltiples para cada criterio
+LEFT JOIN ponderacion po1 ON po1.id_ponderacion = ec.actividades
+LEFT JOIN ponderacion po2 ON po2.id_ponderacion = ec.experiencia
+LEFT JOIN ponderacion po3 ON po3.id_ponderacion = ec.recomendacion
+LEFT JOIN ponderacion po4 ON po4.id_ponderacion = ec.objetivo
+LEFT JOIN ponderacion po5 ON po5.id_ponderacion = ec.intereses
+LEFT JOIN ponderacion po6 ON po6.id_ponderacion = ec.retribucion
+ORDER BY "PTE TOTAL" DESC
+FETCH FIRST 5 ROWS ONLY;
+
+-- ESTRATEGIA DE SEGURIDAD CON EL MINIMO PRIVILEGIO
+-- Ejecutar como usuario ADMIN ORACLE
+-- CREACION DE PERFIL PERSONALIZADO PARA BECAS-ANID
+CREATE PROFILE perfil_seguridad_anid LIMIT
+    FAILED_LOGIN_ATTEMPTS 5
+    PASSWORD_LOCK_TIME 1/24 -- 1 hora de bloqueo SIN USO
+    PASSWORD_LIFE_TIME 30 -- caduca cada 30 días LA CONTRASENIA
+    PASSWORD_GRACE_TIME 10 -- 10 días de gracia para cambiarla LA CONTRASENIA
+    PASSWORD_REUSE_TIME 365 -- no puede repetir por 1 año
+    PASSWORD_REUSE_MAX 5    -- no repetir las últimas 5 CONTRASENBIA
+    PASSWORD_VERIFY_FUNCTION verify_function;
+
+-- CREACIÓN DE ROLES
+CREATE ROLE Rol_AdminSuperANID;         -- Rol con mayores privilegios
+CREATE ROLE Rol_VerificadorANID;        -- Verifica y actualiza ciertos campos
+CREATE ROLE Rol_ComiteEvaluacionANID;   -- Inserta evaluaciones del comité
+CREATE ROLE Rol_VistasANID;             -- Crea vistas para análisis
+CREATE ROLE Rol_PostulanteANID;         -- Inserta y actualiza datos personales
+
+-- CREACIÓN DE USUARIOS
+CREATE USER AdminSuperANID IDENTIFIED BY "Super.Anid123"
+    DEFAULT TABLESPACE DATA
+    QUOTA UNLIMITED ON DATA;
+
+CREATE USER VerificadorANID IDENTIFIED BY "Verif.Anid123"
+    DEFAULT TABLESPACE DATA
+    QUOTA 50M ON DATA;
+
+CREATE USER ComiteEvaluacionANID IDENTIFIED BY "Comite.Anid123"
+    DEFAULT TABLESPACE DATA
+    QUOTA 10M ON DATA;
+
+CREATE USER VistasANID IDENTIFIED BY "Vistas.Anid123"
+    DEFAULT TABLESPACE DATA
+    QUOTA 100M ON DATA;
+
+CREATE USER PostulanteANID IDENTIFIED BY "Postula.Anid123"
+    DEFAULT TABLESPACE DATA
+    QUOTA UNLIMITED ON DATA;
+
+-- CONCEDER PERMISO PARA CONECTARSE
+GRANT CREATE SESSION TO AdminSuperANID;
+GRANT CREATE SESSION TO VerificadorANID;
+GRANT CREATE SESSION TO ComiteEvaluacionANID;
+GRANT CREATE SESSION TO VistasANID;
+GRANT CREATE SESSION TO PostulanteANID;
+
+-- ASIGNACIÓN DE ROLES
+GRANT Rol_AdminSuperANID TO AdminSuperANID;
+GRANT Rol_VerificadorANID TO VerificadorANID;
+GRANT Rol_ComiteEvaluacionANID TO ComiteEvaluacionANID;
+GRANT Rol_VistasANID TO VistasANID;
+GRANT Rol_PostulanteANID TO PostulanteANID;
+
+-- ADMIN: Puede hacer de todo lo necesario para el proyecto ANID
+GRANT RESOURCE TO Rol_AdminSuperANID; -- Incluye CREATE TABLE, INDEX, etc.
+GRANT CREATE USER, DROP USER, ALTER USER TO AdminSuperANID; -- Creara los usuarios si se desea agregar otros
+
+-- EJECUTAR DESDE EL AdminSuperANID DUENIO DE LAS TABLAS
+--acceso a datos y update específicOS PARA Rol_VerificadorANID
+GRANT SELECT ON postulante TO Rol_VerificadorANID;
+GRANT SELECT ON documentos_presentados TO Rol_VerificadorANID;
+GRANT UPDATE (nota_media_pregrado, posicion_ranking, total_egresados)
+    ON postulante TO Rol_VerificadorANID;
+
+-- acceso a vistas + insertar evaluación para rol Rol_ComiteEvaluacionANID
+GRANT SELECT ON postulante TO Rol_ComiteEvaluacionANID;
+GRANT INSERT ON evalua_comite TO Rol_ComiteEvaluacionANID;
+GRANT UPDATE ON evalua_comite TO Rol_ComiteEvaluacionANID;
+
+-- puede crear vistas para rol Rol_VistasANID
+GRANT CREATE VIEW TO Rol_VistasANID;
+GRANT SELECT ON postulante TO Rol_VistasANID;
+GRANT SELECT ON postulacion TO Rol_VistasANID;
+GRANT SELECT ON region TO Rol_VistasANID;
+GRANT SELECT ON estado_postulacion TO Rol_VistasANID;
+GRANT SELECT ON institucion_destino TO Rol_VistasANID;
+GRANT SELECT ON documento TO Rol_VistasANID;
+
+-- Puede insertar y actualizar sus propios datos
+GRANT INSERT ON postulante TO Rol_PostulanteANID;
+GRANT UPDATE (nombres, ap_paterno, ap_materno, fecha_nacimiento, correo, telefono, etnia, discapacidad, nacionalidad)
+    ON postulante TO Rol_PostulanteANID;
+GRANT INSERT ON documentos_presentados TO Rol_PostulanteANID;
+
+
+--Ademas debe crear y ejecutar los scrip de creacion de la DB, Funciones, Trigger, Insert, Index 
